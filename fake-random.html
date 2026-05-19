@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🎭 均衡排座方案管理</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif;
+      color: #fff;
+      padding: 20px;
+    }
+    .header { text-align:center; margin-bottom:24px; }
+    .header h1 { font-size:1.8rem; font-weight:900; background:linear-gradient(90deg,#f9d423,#ff6b6b); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:3px; }
+    .header p { color:rgba(255,255,255,0.45); font-size:0.82rem; margin-top:6px; }
+
+    /* 方案列表 */
+    .plan-list { max-width:700px; margin:0 auto 24px; display:flex; flex-direction:column; gap:12px; }
+    .plan-item {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex; align-items:center; gap:14px;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .plan-item:hover { border-color:rgba(249,212,35,0.4); background:rgba(255,255,255,0.09); }
+    .plan-item.active { border-color:#f9d423; background:rgba(249,212,35,0.08); }
+    .plan-index {
+      width:36px; height:36px; border-radius:50%;
+      background:rgba(249,212,35,0.15); color:#f9d423;
+      display:flex; align-items:center; justify-content:center;
+      font-weight:900; font-size:0.95rem; flex-shrink:0;
+    }
+    .plan-info { flex:1; min-width:0; }
+    .plan-name { font-size:0.95rem; font-weight:700; margin-bottom:4px; }
+    .plan-meta { font-size:0.72rem; color:rgba(255,255,255,0.4); }
+    .plan-actions { display:flex; gap:6px; flex-shrink:0; }
+    .plan-btn {
+      padding:5px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.18);
+      background:rgba(255,255,255,0.06); color:#fff; font-size:0.75rem;
+      cursor:pointer; transition:all 0.15s; white-space:nowrap;
+    }
+    .plan-btn:hover { background:rgba(255,255,255,0.14); }
+    .plan-btn.use { border-color:rgba(249,212,35,0.5); color:#f9d423; }
+    .plan-btn.use:hover { background:rgba(249,212,35,0.15); }
+    .plan-btn.del { border-color:rgba(255,107,107,0.35); color:#ff6b6b; }
+    .plan-btn.del:hover { background:rgba(255,107,107,0.12); }
+    .plan-btn.export { border-color:rgba(67,233,123,0.35); color:#43e97b; }
+    .plan-btn.export:hover { background:rgba(67,233,123,0.12); }
+
+    /* 空状态 */
+    .empty-state {
+      text-align:center; padding:48px 20px; color:rgba(255,255,255,0.3); font-size:0.88rem;
+    }
+    .empty-state .icon { font-size:2.5rem; margin-bottom:12px; }
+
+    /* 底部操作栏 */
+    .bottom-bar {
+      max-width:700px; margin:0 auto;
+      display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+    }
+    .btn {
+      padding:10px 22px; border:none; border-radius:24px;
+      font-size:0.88rem; font-weight:700; cursor:pointer;
+      transition: all 0.2s; letter-spacing:0.5px;
+    }
+    .btn:hover { transform:translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,0.35); }
+    .btn-primary { background:linear-gradient(135deg,#f9d423,#ff6b6b); color:#1a1a2e; }
+    .btn-secondary { background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.2); }
+    .btn-danger { background:rgba(255,107,107,0.15); color:#ff6b6b; border:1px solid rgba(255,107,107,0.3); }
+
+    /* 弹窗通用 */
+    .overlay {
+      display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
+      z-index:1000; align-items:center; justify-content:center; backdrop-filter:blur(4px);
+    }
+    .overlay.show { display:flex; }
+    .dialog {
+      background:linear-gradient(135deg,#1a1a2e,#302b63);
+      border:1px solid rgba(255,255,255,0.15); border-radius:16px;
+      padding:28px 32px; width:420px; max-width:95vw;
+      box-shadow:0 20px 60px rgba(0,0,0,0.6);
+    }
+    .dialog h3 { color:#f9d423; font-size:1.05rem; margin-bottom:16px; }
+    .dialog input[type="text"] {
+      width:100%; padding:10px 14px; border:1px solid rgba(255,255,255,0.18);
+      border-radius:10px; background:rgba(255,255,255,0.08); color:#fff;
+      font-size:0.9rem; outline:none; margin-bottom:16px;
+    }
+    .dialog input[type="text"]:focus { border-color:rgba(249,212,35,0.5); }
+    .dialog-actions { display:flex; justify-content:flex-end; gap:8px; }
+    .dialog-actions .btn { font-size:0.82rem; padding:8px 18px; }
+
+    /* 提示条 */
+    .tip-bar {
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+      background:rgba(30,30,50,0.92); border:1px solid rgba(249,212,35,0.4);
+      color:#f9d423; padding:10px 24px; border-radius:30px;
+      font-size:0.85rem; font-weight:700; backdrop-filter:blur(10px);
+      z-index:100; display:none; letter-spacing:0.5px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.4);
+      animation:slideUp 0.3s ease;
+    }
+    .tip-bar.show { display:block; }
+    @keyframes slideUp { from{opacity:0;transform:translateX(-50%) translateY(10px);} to{opacity:1;transform:translateX(-50%) translateY(0);} }
+
+    /* 详情弹窗内的座位表预览 */
+    .preview-grid {
+      display:grid; gap:4px; margin-top:12px;
+      overflow-x:auto; padding-bottom:4px;
+    }
+    .preview-cell {
+      padding:4px 6px; border-radius:6px; font-size:0.72rem;
+      text-align:center; min-width:48px;
+    }
+    .preview-cell.filled { background:rgba(249,212,35,0.15); border:1px solid rgba(249,212,35,0.3); }
+    .preview-cell.empty  { background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:rgba(255,255,255,0.3); }
+    .preview-cell.disabled { background:rgba(0,0,0,0.2); border:1px dashed rgba(255,255,255,0.1); color:rgba(255,255,255,0.2); }
+
+    /* 同步状态指示器 */
+    .sync-indicator-plan {
+      display:inline-flex; align-items:center; gap:6px;
+      font-size:0.75rem; color:rgba(255,255,255,0.45); margin-left:12px;
+    }
+    .sync-indicator-plan .dot {
+      width:7px; height:7px; border-radius:50%;
+      background:#50ff78; flex-shrink:0;
+    }
+    .sync-indicator-plan .dot.offline { background:#ff6b6b; }
+    .sync-indicator-plan .dot.syncing { background:#f9d423; animation:pulse 0.8s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+    /* 返回链接 */
+    .back-link {
+      display:inline-flex; align-items:center; gap:6px;
+      color:rgba(255,255,255,0.5); font-size:0.82rem;
+      cursor:pointer; margin-bottom:16px; transition:color 0.2s;
+      text-decoration:none;
+    }
+    .back-link:hover { color:#f9d423; }
+  </style>
+</head>
+<body>
+
+<a class="back-link" href="index.html">← 返回座位表系统</a>
+
+<div class="header">
+  <h1>🎭 均衡排座方案管理</h1>
+  <p>管理多个排位方案，一键切换应用 | 数据自动保存
+    <span class="sync-indicator-plan" id="planSyncIndicator">
+      <span class="dot offline" id="planSyncDot"></span>
+      <span id="planSyncText">未登录</span>
+    </span>
+  </p>
+</div>
+
+<!-- 方案列表 -->
+<div class="plan-list" id="planList">
+  <div class="empty-state" id="emptyState">
+    <div class="icon">📭</div>
+    暂无排位方案<br>
+    <span style="font-size:0.78rem;color:rgba(255,255,255,0.25);">在座位表系统中保存"均衡排座方案"后，可在此管理</span>
+  </div>
+</div>
+
+<!-- 底部操作栏 -->
+<div class="bottom-bar">
+  <button class="btn btn-secondary" onclick="importFromMainSystem()">📥 从当前系统导入</button>
+  <button class="btn btn-secondary" onclick="importPlanFromFile()">📂 从文件导入方案</button>
+  <button class="btn btn-secondary" onclick="exportAllPlans()">📤 导出全部方案</button>
+  <button class="btn btn-secondary" id="planSyncUploadBtn" onclick="syncPlansToServer()" style="display:none;">☁️ 上传到服务器</button>
+  <button class="btn btn-secondary" id="planSyncDownloadBtn" onclick="syncPlansFromServer()" style="display:none;">📥 从服务器下载</button>
+  <button class="btn btn-danger" onclick="clearAllPlans()">🗑 清空所有方案</button>
+</div>
+
+<!-- 重命名方案弹窗 -->
+<div class="overlay" id="planDialog">
+  <div class="dialog">
+    <h3 id="planDialogTitle">✏️ 重命名方案</h3>
+    <input type="text" id="planNameInput" placeholder="输入方案名称（如：第一次月考排位）" maxlength="30"/>
+    <div class="dialog-actions">
+      <button class="btn btn-secondary" onclick="closePlanDialog()">取消</button>
+      <button class="btn btn-primary" onclick="confirmPlanDialog()">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 方案详情弹窗 -->
+<div class="overlay" id="detailOverlay">
+  <div class="dialog" style="width:600px;max-width:98vw;">
+    <h3 id="detailTitle">📋 方案详情</h3>
+    <div id="detailContent"></div>
+    <div class="dialog-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" onclick="closeDetail()">关闭</button>
+      <button class="btn btn-primary" id="detailApplyBtn" onclick="applyPlan()">✅ 应用此方案</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提示条 -->
+<div class="tip-bar" id="tipBar"></div>
+
+<!-- 隐藏的文件导入 -->
+<input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="handleImportFile(this.files[0])"/>
+
+<script>
+/* ============ 数据结构 ============ */
+// 所有方案：{ id, name, createdAt, updatedAt, data: { 学生名: seatId }, classConfig:{name,rows,colGroups} }
+let plans = [];
+let currentPlanId = null; // 当前正在查看/编辑的方案
+let renamingId = null;
+
+const STORAGE_KEY = 'class2507_fakeRandomPlans';
+const EMPTY_STATE = document.getElementById('emptyState'); // 缓存引用，避免被 innerHTML 清除后丢失
+
+/* ============ 初始化 ============ */
+async function init() {
+  loadPlans();
+  renderPlans();
+  // 初始化同步状态
+  const auth = getPlanSyncAuth();
+  updatePlanSyncUI(auth);
+  // 已登录则自动从云端加载方案（覆盖本地）
+  if (auth) {
+    await syncPlansFromServer(true);
+  }
+}
+
+/* ============ 从当前主系统导入方案 ============ */
+function importFromMainSystem() {
+  let data = {};
+  try {
+    const raw = localStorage.getItem('class2507_fakeRandomPreset');
+    if (raw) data = JSON.parse(raw);
+  } catch(e) {}
+  const count = Object.keys(data).length;
+  if (count === 0) {
+    showTip('⚠ 主系统暂无排位方案，请先在座位表中保存方案', 3000);
+    return;
+  }
+  if (!confirm(`检测到主系统有 ${count} 人的排位方案，是否导入为新的管理方案？`)) return;
+  let classConfig = null;
+  try { classConfig = JSON.parse(localStorage.getItem('class2507_config')); } catch(e) {}
+  const now = Date.now();
+  const plan = {
+    id: 'plan_' + now + '_' + Math.random().toString(36).slice(2,7),
+    name: '主系统方案 ' + new Date().toLocaleString('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
+    createdAt: now,
+    updatedAt: now,
+    data,
+    classConfig,
+  };
+  plans.unshift(plan);
+  savePlans();
+  renderPlans();
+  showTip(`✅ 已从主系统导入方案「${plan.name}」`, 2500);
+}
+
+/* ============ localStorage ============ */
+function loadPlans() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) plans = JSON.parse(raw);
+  } catch(e) { plans = []; }
+}
+
+function savePlans() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(plans));
+  // 自动同步到服务器（静默，不打扰用户）
+  autoPushPlansToServer();
+}
+
+/* ============ 渲染方案列表 ============ */
+function renderPlans() {
+  const list = document.getElementById('planList');
+
+  if (plans.length === 0) {
+    list.innerHTML = '';
+    list.appendChild(EMPTY_STATE);
+    EMPTY_STATE.style.display = '';
+    return;
+  }
+  // 先取走 empty 再清空 list，避免被 innerHTML 销毁
+  try { list.removeChild(EMPTY_STATE); } catch(e) {}
+  EMPTY_STATE.style.display = 'none';
+  list.innerHTML = '';
+  plans.forEach((plan, idx) => {
+    const count = Object.keys(plan.data || {}).length;
+    const dateStr = new Date(plan.updatedAt || plan.createdAt).toLocaleString('zh-CN', {month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const active = (plan.id === getCurrentActivePlanId());
+    const el = document.createElement('div');
+    el.className = 'plan-item' + (active ? ' active' : '');
+    el.innerHTML = `
+      <div class="plan-index">${idx+1}</div>
+      <div class="plan-info">
+        <div class="plan-name">${escHtml(plan.name)} ${active ? '<span style="color:#f9d423;font-size:0.72rem;">（当前使用中）</span>' : ''}</div>
+        <div class="plan-meta">${count} 人排位 · 更新于 ${dateStr}</div>
+      </div>
+      <div class="plan-actions">
+        <button class="plan-btn export" onclick="event.stopPropagation(); exportPlan('${plan.id}')">📤 导出</button>
+        <button class="plan-btn" onclick="event.stopPropagation(); renamePlan('${plan.id}')">✏️ 重命名</button>
+        <button class="plan-btn use" onclick="event.stopPropagation(); viewPlan('${plan.id}')">👁 查看</button>
+        ${!active ? `<button class="plan-btn use" onclick="event.stopPropagation(); applyPlanConfirm('${plan.id}')">✅ 应用</button>` : ''}
+        <button class="plan-btn del" onclick="event.stopPropagation(); deletePlan('${plan.id}')">✕</button>
+      </div>
+    `;
+    el.onclick = () => viewPlan(plan.id);
+    list.appendChild(el);
+  });
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ============ 获取/设置当前激活方案 ============ */
+function getCurrentActivePlanId() {
+  return localStorage.getItem('class2507_fakeRandomActivePlan');
+}
+function setCurrentActivePlanId(id) {
+  if (id) localStorage.setItem('class2507_fakeRandomActivePlan', id);
+  else localStorage.removeItem('class2507_fakeRandomActivePlan');
+}
+
+/* ============ 重命名方案 ============ */
+function closePlanDialog() {
+  document.getElementById('planDialog').classList.remove('show');
+}
+function confirmPlanDialog() {
+  const name = document.getElementById('planNameInput').value.trim();
+  if (!name) { showTip('⚠ 请输入方案名称'); return; }
+  renamePlanConfirm(name);
+  closePlanDialog();
+}
+function renamePlan(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  renamingId = id;
+  document.getElementById('planDialogTitle').textContent = '✏️ 重命名方案';
+  document.getElementById('planNameInput').value = plan.name;
+  document.getElementById('planDialog').classList.add('show');
+  setTimeout(() => document.getElementById('planNameInput').focus(), 80);
+}
+function renamePlanConfirm(name) {
+  const plan = plans.find(p => p.id === renamingId);
+  if (!plan) return;
+  plan.name = name;
+  plan.updatedAt = Date.now();
+  savePlans();
+  renderPlans();
+  showTip(`✅ 已重命名为「${name}」`, 2000);
+}
+
+/* ============ 删除 ============ */
+function deletePlan(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  if (!confirm(`确定删除方案「${plan.name}」吗？`)) return;
+  plans = plans.filter(p => p.id !== id);
+  if (getCurrentActivePlanId() === id) setCurrentActivePlanId(null);
+  savePlans();
+  renderPlans();
+  showTip(`🗑 已删除方案「${plan.name}」`, 2000);
+}
+
+/* ============ 查看方案详情 ============ */
+function viewPlan(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  currentPlanId = id;
+  document.getElementById('detailTitle').textContent = `📋 ${plan.name}`;
+  renderPlanDetail(plan);
+  document.getElementById('detailOverlay').classList.add('show');
+}
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('show');
+  currentPlanId = null;
+}
+function renderPlanDetail(plan) {
+  const container = document.getElementById('detailContent');
+  const entries = Object.entries(plan.data || {});
+  const count = entries.length;
+
+  let html = `<div style="font-size:0.82rem;color:rgba(255,255,255,0.5);margin-bottom:12px;">共 ${count} 名学生 | 创建于 ${new Date(plan.createdAt).toLocaleString('zh-CN')} | 更新于 ${new Date(plan.updatedAt).toLocaleString('zh-CN')}</div>`;
+
+  if (count === 0) {
+    html += '<div style="color:rgba(255,255,255,0.3);font-size:0.85rem;padding:16px 0;">此方案暂无排位数据</div>';
+    container.innerHTML = html;
+    return;
+  }
+
+  // 按排分组显示
+  const rowNames = ['','一','二','三','四','五','六','七','八','九','十'];
+  const colNames = ['','①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫'];
+
+  // 构建 seatId → name 映射
+  const seatToName = {};
+  entries.forEach(([name, seatId]) => { seatToName[seatId] = name; });
+
+  // 尝试读取列数
+  const cols = plan.classConfig ? (plan.classConfig.colGroups * 2) : 8;
+
+  html += '<div style="max-height:400px;overflow-y:auto;">';
+  // 按排显示（从最后一排到第一排，与主页一致：第一排靠近讲台在底部）
+  const maxSeatId = Math.max(...entries.map(e => parseInt(e[1])), 0);
+  const rows = Math.ceil((maxSeatId + 1) / cols);
+
+  for (let r = rows - 1; r >= 0; r--) {
+    html += `<div style="margin-bottom:6px;"><span style="color:rgba(255,255,255,0.4);font-size:0.75rem;margin-right:8px;">第${rowNames[r+1]||r+1}排</span>`;
+    for (let c = 0; c < cols; c++) {
+      if (c > 0 && c % 2 === 0) html += '<span style="width:8px;display:inline-block;"></span>';
+      const seatId = r * cols + c;
+      const name = seatToName[seatId];
+      if (name) {
+        html += `<span class="preview-cell filled" style="display:inline-block;margin:2px;">${escHtml(name)}</span>`;
+      } else {
+        html += `<span class="preview-cell empty" style="display:inline-block;margin:2px;">空</span>`;
+      }
+    }
+    html += '</div>';
+  }
+  // 讲台
+  html += '<div style="background:linear-gradient(135deg,#f9d423,#ff8c00);color:#1a1a2e;text-align:center;padding:8px;border-radius:10px;font-weight:900;font-size:0.9rem;letter-spacing:4px;margin-top:12px;box-shadow:0 4px 20px rgba(249,212,35,0.4);">📋 讲  台</div>';
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+/* ============ 应用方案 ============ */
+function applyPlanConfirm(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  if (!confirm(`确定应用方案「${plan.name}」吗？\n应用后，在主系统点击"一键随机排座"将按此方案排座。`)) return;
+  doApplyPlan(id);
+}
+function applyPlan() {
+  // 从详情弹窗中应用
+  if (!currentPlanId) return;
+  applyPlanConfirm(currentPlanId);
+}
+function doApplyPlan(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  // 写入主系统的 localStorage
+  localStorage.setItem('class2507_fakeRandomPreset', JSON.stringify(plan.data || {}));
+  setCurrentActivePlanId(id);
+  savePlans();
+  renderPlans();
+  showTip(`✅ 已应用方案「${plan.name}」`, 2500);
+}
+
+/* ============ 导出/导入 ============ */
+function exportPlan(id) {
+  const plan = plans.find(p => p.id === id);
+  if (!plan) return;
+  const blob = new Blob([JSON.stringify(plan, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `排位方案_${plan.name}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showTip(`📤 已导出方案「${plan.name}」`, 2000);
+}
+function exportAllPlans() {
+  if (plans.length === 0) { showTip('⚠ 暂无方案可导出'); return; }
+  const blob = new Blob([JSON.stringify(plans, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `排位方案全集_${new Date().toLocaleDateString('zh-CN').replace(/\//g,'-')}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showTip(`📤 已导出全部 ${plans.length} 个方案`, 2500);
+}
+function importPlanFromFile() {
+  document.getElementById('importFileInput').value = '';
+  document.getElementById('importFileInput').click();
+}
+function handleImportFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      const list = Array.isArray(data) ? data : [data];
+      let imported = 0;
+      list.forEach(item => {
+        if (!item.name || !item.data) return;
+        // 避免重复 id
+        if (plans.find(p => p.id === item.id)) {
+          item.id = 'plan_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+        }
+        item.importedAt = Date.now();
+        plans.unshift(item);
+        imported++;
+      });
+      savePlans();
+      renderPlans();
+      showTip(`✅ 已导入 ${imported} 个方案`, 2500);
+    } catch(err) {
+      showTip('⚠ 文件格式错误，导入失败');
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ============ 清空所有方案 ============ */
+function clearAllPlans() {
+  if (plans.length === 0) return;
+  if (!confirm(`确定清空所有 ${plans.length} 个排位方案吗？此操作不可恢复！`)) return;
+  plans = [];
+  setCurrentActivePlanId(null);
+  savePlans();
+  renderPlans();
+  showTip('🗑 已清空所有方案', 2000);
+}
+
+/* ============ 提示 ============ */
+let tipTimer = null;
+function showTip(msg, duration) {
+  const bar = document.getElementById('tipBar');
+  bar.textContent = msg;
+  bar.classList.add('show');
+  clearTimeout(tipTimer);
+  if (duration) tipTimer = setTimeout(() => bar.classList.remove('show'), duration);
+}
+
+/* ============ 服务器同步 ============ */
+const PLAN_API_BASE_URL = '/api';
+
+function getPlanSyncAuth() {
+  const token = localStorage.getItem('seat_user_token');
+  const username = localStorage.getItem('seat_username');
+  if (token && username) return { token, username };
+  return null;
+}
+
+function updatePlanSyncUI(auth) {
+  const dot = document.getElementById('planSyncDot');
+  const text = document.getElementById('planSyncText');
+  const uploadBtn = document.getElementById('planSyncUploadBtn');
+  const downloadBtn = document.getElementById('planSyncDownloadBtn');
+  if (auth) {
+    dot.className = 'dot';
+    text.textContent = auth.username;
+    uploadBtn.style.display = '';
+    downloadBtn.style.display = '';
+  } else {
+    dot.className = 'dot offline';
+    text.textContent = '未登录';
+    uploadBtn.style.display = 'none';
+    downloadBtn.style.display = 'none';
+  }
+}
+
+async function syncPlansToServer() {
+  const auth = getPlanSyncAuth();
+  if (!auth) { showTip('⚠ 请先在主系统登录', 2500); return; }
+
+  const dot = document.getElementById('planSyncDot');
+  dot.className = 'dot syncing';
+
+  try {
+    const resp = await fetch(PLAN_API_BASE_URL + '?action=save', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + auth.token
+      },
+      body: JSON.stringify({
+        data: {
+          fakeRandomPlans: plans
+        }
+      })
+    });
+    const data = await resp.json();
+    if (data.success) {
+      dot.className = 'dot';
+      showTip('✅ 方案已上传到云端 ' + data.time, 2500);
+    } else {
+      dot.className = 'dot offline';
+      showTip('❌ 上传失败：' + data.message, 3000);
+    }
+  } catch(e) {
+    dot.className = 'dot offline';
+    showTip('❌ 网络错误：' + e.message, 3000);
+  }
+}
+
+async function syncPlansFromServer(silent = false) {
+  const auth = getPlanSyncAuth();
+  if (!auth) {
+    if (!silent) showTip('⚠ 请先在主系统登录', 2500);
+    return;
+  }
+
+  const dot = document.getElementById('planSyncDot');
+  dot.className = 'dot syncing';
+
+  try {
+    const resp = await fetch(PLAN_API_BASE_URL + '?action=load', {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + auth.token
+      }
+    });
+    const data = await resp.json();
+
+    if (data.success && data.data && data.data.fakeRandomPlans) {
+      const serverPlans = data.data.fakeRandomPlans.value;
+      if (Array.isArray(serverPlans) && serverPlans.length > 0) {
+        // 服务器方案覆盖本地
+        plans = JSON.parse(JSON.stringify(serverPlans));
+        savePlans();
+        renderPlans();
+        dot.className = 'dot';
+        if (!silent) showTip('✅ 已从云端下载 ' + serverPlans.length + ' 个方案', 2500);
+      } else {
+        dot.className = 'dot';
+        if (!silent) showTip('📭 云端暂无排位方案数据', 2500);
+      }
+    } else {
+      dot.className = 'dot';
+      if (!silent) showTip('📭 云端暂无排位方案数据', 2500);
+    }
+  } catch(e) {
+    dot.className = 'dot offline';
+    if (!silent) showTip('❌ 下载失败：' + e.message, 3000);
+  }
+}
+
+/* ============ 静默自动同步 ============ */
+function autoPushPlansToServer() {
+  const auth = getPlanSyncAuth();
+  if (!auth) return;
+  fetch(PLAN_API_BASE_URL + '?action=save', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + auth.token
+    },
+    body: JSON.stringify({
+      data: {
+        fakeRandomPlans: plans,
+        fakeRandomActivePlan: localStorage.getItem('class2507_fakeRandomActivePlan') || '',
+        fakeRandomPreset: JSON.parse(localStorage.getItem('class2507_fakeRandomPreset') || '{}')
+      }
+    })
+  }).catch(() => {});
+}
+
+/* ============ 启动 ============ */
+init();
+</script>
+</body>
+</html>
