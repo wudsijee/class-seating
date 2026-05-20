@@ -3156,7 +3156,10 @@ async function webdavDownload() {
 }
 
 /* ====================== 服务器云同步（替代 WebDAV）====================== */
-const API_BASE_URL = '/api'; // 服务器 API 地址
+// API 地址：本地运行时用完整 URL，生产环境用相对路径
+const API_BASE_URL = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'https://zuowei.hryz.cc/api'
+  : '/api';
 const TOKEN_KEY = 'seat_user_token';
 const USERNAME_KEY = 'seat_username';
 

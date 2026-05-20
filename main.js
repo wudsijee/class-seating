@@ -1,81 +1,29 @@
-const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const express = require('express');
 
 let mainWindow;
-let server;
 const PORT = 3456;
-const API_TARGET = 'https://zuowei.hryz.cc';
-
-function getStaticDir() {
-  if (app.isPackaged) {
-    return path.join(process.resourcesPath, 'app.asar');
-  }
-  return __dirname;
-}
-
-// 手动代理：用 fetch 转发，确保 body 和方法都正确
-function proxyApiRequest(req, res) {
-  (async () => {
-    try {
-      const url = new URL(req.url, API_TARGET);
-
-      // 读取原始 body（Express 未解析时，req 本身是流）
-      let body = null;
-      if (req.method !== 'GET' && req.method !== 'HEAD') {
-        const chunks = [];
-        req.on('data', (chunk) => chunks.push(chunk));
-        await new Promise((resolve) => req.on('end', resolve));
-        body = Buffer.concat(chunks);
-      }
-
-      // 构造转发 headers，去掉 host（fetch 会自动设）
-      const headers = {};
-      for (const [key, val] of Object.entries(req.headers)) {
-        if (key.toLowerCase() !== 'host') headers[key] = val;
-      }
-
-      const resp = await fetch(url.toString(), {
-        method: req.method,
-        headers,
-        body,
-      });
-
-      // 转发响应
-      res.statusCode = resp.status;
-      resp.headers.forEach((val, key) => {
-        if (key.toLowerCase() !== 'transfer-encoding') {
-          res.setHeader(key, val);
-        }
-      });
-      const buf = Buffer.from(await resp.arrayBuffer());
-      res.end(buf);
-    } catch (err) {
-      if (!res.headersSent) {
-        res.statusCode = 502;
-        res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ success: false, error: '代理错误', detail: err.message }));
-      }
-    }
-  })();
-}
+const STATIC_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, 'app.asar')
+  : __dirname;
 
 function startLocalServer() {
   const app = express();
-  const staticDir = getStaticDir();
-
-  app.use(express.static(staticDir));
-
-  // API 代理：手动转发
-  app.use('/api', (req, res) => {
-    proxyApiRequest(req, res);
-  });
-
+  app.use(express.static(STATIC_DIR));
   return new Promise((resolve, reject) => {
-    server = app.listen(PORT, () => resolve());
-    server.on('error', (err) => {
+    const srv = app.listen(PORT, () => {
+      server = srv;
+      resolve();
+    });
+    srv.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        server = app.listen(PORT + 1, () => { PORT += 1; resolve(); });
+        const alt = PORT + 1;
+        const srv2 = app.listen(alt, () => {
+          PORT = alt;
+          server = srv2;
+          resolve();
+        });
       } else {
         reject(err);
       }
@@ -83,8 +31,10 @@ function startLocalServer() {
   });
 }
 
+let server;
+
 function createWindow() {
-  const iconPath = path.join(getStaticDir(), 'icon.ico');
+  const iconPath = path.join(STATIC_DIR, 'icon.ico');
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
@@ -178,9 +128,9 @@ function setAppMenu() {
 app.whenReady().then(async () => {
   try {
     await startLocalServer();
-    console.log(`本地服务器已启动：http://localhost:${PORT}`);
+    console.log(`优座已启动：http://localhost:${PORT}`);
   } catch (e) {
-    console.error('启动本地服务器失败：', e);
+    console.error('启动失败：', e);
     app.quit();
     return;
   }
