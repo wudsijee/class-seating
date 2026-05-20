@@ -1,0 +1,36 @@
+{
+  "name": "youzuo",
+  "version": "1.0.0",
+  "description": "优座 - 智能排座系统",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build-win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.hewei.youzuo",
+    "productName": "优座",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "index.html",
+      "fake-random.html",
+      "icon.ico",
+      "icon.png",
+      "_worker.js",
+      "README.md"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "icon.ico",
+      "signAndEditExecutable": false
+    }
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

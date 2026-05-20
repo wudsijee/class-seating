@@ -11,3 +11,8 @@ Thumbs.db
 
 # 临时文件
 *.tmp
+
+# Electron
+node_modules/
+dist/
+package-lock.json
