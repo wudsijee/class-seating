@@ -2,6 +2,8 @@ const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const express = require('express');
 
+app.setName('优座');
+
 let mainWindow;
 const PORT = 3456;
 const STATIC_DIR = app.isPackaged
