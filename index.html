@@ -1648,7 +1648,7 @@
 <div class="header">
   <div class="header-wrap">
     <div style="display: flex; align-items: baseline; gap: 8px;">
-      <h1 id="mainTitle">🏫 座位表系统 <small style="font-size:1rem;font-weight:400;opacity:0.6;">v1.0</small></h1>
+      <h1 id="mainTitle">优座 <small style="font-size:1rem;font-weight:400;opacity:0.6;">v1.0</small></h1>
       <a href="https://20060920.xyz" target="_blank" style="color: #666; font-size: 14px; margin-left: 8px; text-decoration: none;">合味随笔</a>
     </div>
     <div class="btn-class-setting" onclick="openClassSetting()" title="班级设置">⚙️</div>
@@ -3571,8 +3571,8 @@ function applyClassSetting() {
 }
 
 function updateClassTitle() {
-  const title = `🏫 ${classConfig.name} 座位表系统`;
-  document.title = title.replace(/🏫\s*/,'');
+  const title = `'优座';
+  document.title = title;
   const el = document.getElementById('mainTitle');
   if (el) {
     // 创建包含版权信息的HTML结构
