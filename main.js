@@ -1,16 +1,11 @@
-// 清除可能导致 Electron 以 Node 模式运行的环境变量
-delete process.env.ELECTRON_RUN_AS_NODE;
-
-const { app, BrowserWindow, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, dialog, shell, ipcMain } = require('electron');
 const path = require('path');
 const express = require('express');
-const httpProxy = require('http-proxy');
 
 let mainWindow;
 let server;
 const PORT = 3456;
 const API_TARGET = 'https://zuowei.hryz.cc';
-const proxy = httpProxy.createProxyServer({ target: API_TARGET, changeOrigin: true, secure: false });
 
 function getStaticDir() {
   if (app.isPackaged) {
@@ -19,18 +14,61 @@ function getStaticDir() {
   return __dirname;
 }
 
+// 手动代理：用 fetch 转发，确保 body 和方法都正确
+function proxyApiRequest(req, res) {
+  (async () => {
+    try {
+      const url = new URL(req.url, API_TARGET);
+
+      // 读取原始 body（Express 未解析时，req 本身是流）
+      let body = null;
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const chunks = [];
+        req.on('data', (chunk) => chunks.push(chunk));
+        await new Promise((resolve) => req.on('end', resolve));
+        body = Buffer.concat(chunks);
+      }
+
+      // 构造转发 headers，去掉 host（fetch 会自动设）
+      const headers = {};
+      for (const [key, val] of Object.entries(req.headers)) {
+        if (key.toLowerCase() !== 'host') headers[key] = val;
+      }
+
+      const resp = await fetch(url.toString(), {
+        method: req.method,
+        headers,
+        body,
+      });
+
+      // 转发响应
+      res.statusCode = resp.status;
+      resp.headers.forEach((val, key) => {
+        if (key.toLowerCase() !== 'transfer-encoding') {
+          res.setHeader(key, val);
+        }
+      });
+      const buf = Buffer.from(await resp.arrayBuffer());
+      res.end(buf);
+    } catch (err) {
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ success: false, error: '代理错误', detail: err.message }));
+      }
+    }
+  })();
+}
+
 function startLocalServer() {
   const app = express();
   const staticDir = getStaticDir();
 
   app.use(express.static(staticDir));
 
+  // API 代理：手动转发
   app.use('/api', (req, res) => {
-    proxy.web(req, res, {}, (err) => {
-      if (!res.headersSent) {
-        res.status(502).json({ error: '后端服务不可用', detail: err.message });
-      }
-    });
+    proxyApiRequest(req, res);
   });
 
   return new Promise((resolve, reject) => {
@@ -57,9 +95,9 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      webSecurity: true
+      webSecurity: true,
     },
-    show: false
+    show: false,
   });
 
   mainWindow.loadURL(`http://localhost:${PORT}`);
@@ -79,7 +117,7 @@ function createWindow() {
       defaultId: 1,
       cancelId: 1,
       title: '确认退出',
-      message: '确定要退出优座吗？'
+      message: '确定要退出优座吗？',
     });
     if (response === 0) {
       mainWindow.destroy();
@@ -98,8 +136,8 @@ function setAppMenu() {
       submenu: [
         { label: '关于优座', role: 'about' },
         { type: 'separator' },
-        { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() }
-      ]
+        { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
+      ],
     },
     {
       label: '视图',
@@ -112,7 +150,7 @@ function setAppMenu() {
         { label: '实际大小', accelerator: 'CmdOrCtrl+0', role: 'resetzoom' },
         { label: '放大', accelerator: 'CmdOrCtrl+Plus', role: 'zoomin' },
         { label: '缩小', accelerator: 'CmdOrCtrl+-', role: 'zoomout' },
-      ]
+      ],
     },
     {
       label: '功能',
@@ -121,7 +159,7 @@ function setAppMenu() {
         { label: '均衡排座方案管理', click: () => mainWindow && mainWindow.loadURL(`http://localhost:${PORT}/fake-random.html`) },
         { type: 'separator' },
         { label: '用浏览器打开', click: () => shell.openExternal('https://zuowei.hryz.cc') },
-      ]
+      ],
     },
     {
       label: '帮助',
@@ -130,8 +168,8 @@ function setAppMenu() {
         { label: '合味随笔', click: () => shell.openExternal('https://20060920.xyz') },
         { type: 'separator' },
         { label: '开发者工具', accelerator: 'F12', role: 'toggleDevTools' },
-      ]
-    }
+      ],
+    },
   ];
 
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
